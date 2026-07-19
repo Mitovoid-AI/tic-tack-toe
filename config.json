@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "theme": {
+    "background": "#0a0a1a",
+    "surface": "#1a1a2e",
+    "primary": "#00d4ff",
+    "secondary": "#ff006e",
+    "accent": "#7b2ff7",
+    "text_primary": "#e0e0e0",
+    "text_secondary": "#a0a0a0"
+  },
+  "board": {
+    "size": 3,
+    "win_length": 3
+  },
+  "features": {
+    "pvp_enabled": true,
+    "ai_enabled": true,
+    "ai_difficulty": "medium",
+    "show_stats": true,
+    "show_history": true
+  },
+  "ui": {
+    "app_title": "Tic Tac Toe",
+    "subtitle": "Neon Edition"
+  }
+}
