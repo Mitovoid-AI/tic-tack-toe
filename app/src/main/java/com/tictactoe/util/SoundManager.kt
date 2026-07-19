@@ -28,11 +28,21 @@ object SoundManager {
 
             val uri = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
             if (uri != null) {
-                tapSound = soundPool?.load(context, uri, 1) ?: 0
-                winSound = soundPool?.load(context, uri, 1) ?: 0
-                drawSound = soundPool?.load(context, uri, 1) ?: 0
+                var afd: android.content.res.AssetFileDescriptor? = null
+                try {
+                    afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
+                    afd?.let {
+                        tapSound = soundPool?.load(it, 1) ?: 0
+                        winSound = soundPool?.load(it, 1) ?: 0
+                        drawSound = soundPool?.load(it, 1) ?: 0
+                    }
+                } catch (_: Exception) {
+                    // Devices/CI may not have audio
+                } finally {
+                    afd?.close()
+                }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Silently fail on devices/CI without audio
         }
     }
