@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 data class GameUiState(
     val gameState: GameState = GameState(),
-    val mode: String = "pvp",       // "pvp" or "ai"
+    val mode: String = "pvp",
     val scoreX: Int = 0,
     val scoreO: Int = 0,
     val scoreDraw: Int = 0,
@@ -34,7 +34,7 @@ class GameViewModel : ViewModel() {
 
     fun startGame(mode: String) {
         val boardSize = PrefsManager.boardSize
-        val winLength = if (boardSize == 3) 3 else if (boardSize == 4) 4 else 4
+        val winLength = if (boardSize == 3) 3 else 4
         val firstPlayer = PrefsManager.firstPlayer
         stateHistory.clear()
         _uiState.update {
@@ -56,15 +56,15 @@ class GameViewModel : ViewModel() {
         stateHistory.add(current.gameState)
         val newState = current.gameState.makeMove(row, col)
         _uiState.update { it.copy(gameState = newState, canUndo = stateHistory.isNotEmpty()) }
-        SoundManager.playTap()
-        HapticManager.lightTap()
+
+        try { SoundManager.playTap() } catch (_: Exception) {}
+        try { HapticManager.lightTap() } catch (_: Exception) {}
 
         if (newState.isGameOver) {
             onGameEnd(newState)
             return
         }
 
-        // AI turn
         if (current.mode == "ai" && newState.currentPlayer == "O") {
             triggerAiMove()
         }
@@ -72,7 +72,6 @@ class GameViewModel : ViewModel() {
 
     fun undo() {
         if (stateHistory.isEmpty()) return
-        // In AI mode, undo twice (your move + AI move)
         val stepsBack = if (_uiState.value.mode == "ai" && stateHistory.size >= 2) 2 else 1
         repeat(stepsBack) {
             if (stateHistory.isNotEmpty()) {
@@ -86,7 +85,7 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(isAiThinking = true) }
 
         viewModelScope.launch {
-            delay(300) // Small delay so AI doesn't feel instant
+            delay(300)
 
             val state = _uiState.value.gameState
             val difficulty = AppConfig.features.ai_difficulty
@@ -107,13 +106,15 @@ class GameViewModel : ViewModel() {
 
     private fun onGameEnd(state: GameState) {
         val winner = state.winner
-        if (state.isDraw) {
-            SoundManager.playDraw()
-            HapticManager.drawVibration()
-        } else {
-            SoundManager.playWin()
-            HapticManager.winVibration()
-        }
+        try {
+            if (state.isDraw) {
+                SoundManager.playDraw()
+                HapticManager.drawVibration()
+            } else {
+                SoundManager.playWin()
+                HapticManager.winVibration()
+            }
+        } catch (_: Exception) {}
 
         _uiState.update {
             it.copy(
@@ -124,12 +125,14 @@ class GameViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            repo.saveResult(
-                mode = _uiState.value.mode,
-                winner = winner ?: "draw",
-                moves = state.moveCount,
-                boardSize = state.boardSize
-            )
+            try {
+                repo.saveResult(
+                    mode = _uiState.value.mode,
+                    winner = winner ?: "draw",
+                    moves = state.moveCount,
+                    boardSize = state.boardSize
+                )
+            } catch (_: Exception) {}
         }
     }
 

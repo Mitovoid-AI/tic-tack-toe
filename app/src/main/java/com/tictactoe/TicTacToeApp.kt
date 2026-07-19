@@ -21,10 +21,12 @@ class TicTacToeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        ThemeManager.init(this)
-        PrefsManager.init(this)
-        HapticManager.init(this)
-        SoundManager.init(this)
+
+        try { ThemeManager.init(this) } catch (_: Exception) {}
+        try { PrefsManager.init(this) } catch (_: Exception) {}
+        try { HapticManager.init(this) } catch (_: Exception) {}
+        try { SoundManager.init(this) } catch (_: Exception) {}
+
         remoteConfigManager = RemoteConfigManager(this)
         database = AppDatabase.create(this)
         gameRepository = GameRepository(database.gameDao())

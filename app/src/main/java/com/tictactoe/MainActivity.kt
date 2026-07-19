@@ -30,12 +30,15 @@ class MainActivity : ComponentActivity() {
             var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
             LaunchedEffect(Unit) {
-                val config = app.remoteConfigManager.fetchConfig()
-                AppConfig.update(config)
+                try {
+                    val config = app.remoteConfigManager.fetchConfig()
+                    AppConfig.update(config)
+                } catch (_: Exception) {}
 
-                // Check for app update
-                val update = UpdateManager.checkForUpdate(this@MainActivity)
-                updateInfo = update
+                try {
+                    val update = UpdateManager.checkForUpdate(this@MainActivity)
+                    updateInfo = update
+                } catch (_: Exception) {}
             }
 
             TicTacToeTheme {
@@ -46,7 +49,6 @@ class MainActivity : ComponentActivity() {
                     NavGraph()
                 }
 
-                // Show update dialog if available
                 updateInfo?.let { info ->
                     UpdateDialog(
                         updateInfo = info,
