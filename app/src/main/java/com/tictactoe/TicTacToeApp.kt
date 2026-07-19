@@ -6,6 +6,7 @@ import com.tictactoe.data.local.AppDatabase
 import com.tictactoe.data.repository.GameRepository
 import com.tictactoe.ui.theme.ThemeManager
 import com.tictactoe.util.HapticManager
+import com.tictactoe.util.MarkerManager
 import com.tictactoe.util.PrefsManager
 import com.tictactoe.util.SoundManager
 
@@ -26,6 +27,7 @@ class TicTacToeApp : Application() {
         try { PrefsManager.init(this) } catch (_: Exception) {}
         try { HapticManager.init(this) } catch (_: Exception) {}
         try { SoundManager.init(this) } catch (_: Exception) {}
+        try { MarkerManager.init(this) } catch (_: Exception) {}
 
         remoteConfigManager = RemoteConfigManager(this)
         database = AppDatabase.create(this)

@@ -47,6 +47,7 @@ import com.tictactoe.ui.components.GlassCard
 import com.tictactoe.ui.components.NeonButton
 import com.tictactoe.ui.theme.AppTheme
 import com.tictactoe.ui.theme.ThemeManager
+import com.tictactoe.util.MarkerManager
 import com.tictactoe.util.PrefsManager
 import kotlinx.coroutines.launch
 
@@ -310,6 +311,80 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 18.sp
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Custom Markers
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                Text("Custom Markers", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Player X marker
+                Text("Player X Marker", color = textSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                var selectedX by remember { mutableStateOf(MarkerManager.markerX) }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MarkerManager.emojiOptions.take(10).forEach { emoji ->
+                        val isSelected = selectedX == emoji
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) primary.copy(alpha = 0.25f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) primary else textSecondary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    selectedX = emoji
+                                    MarkerManager.markerX = emoji
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 18.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Player O marker
+                Text("Player O Marker", color = textSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                var selectedO by remember { mutableStateOf(MarkerManager.markerO) }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MarkerManager.emojiOptions.drop(10).forEach { emoji ->
+                        val isSelected = selectedO == emoji
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) secondary.copy(alpha = 0.25f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) secondary else textSecondary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    selectedO = emoji
+                                    MarkerManager.markerO = emoji
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 18.sp)
                         }
                     }
                 }

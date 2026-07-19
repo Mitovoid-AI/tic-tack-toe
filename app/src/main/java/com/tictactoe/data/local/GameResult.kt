@@ -7,8 +7,9 @@ import androidx.room.PrimaryKey
 data class GameResult(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val timestamp: Long = System.currentTimeMillis(),
-    val mode: String,          // "pvp" or "ai"
-    val winner: String,        // "X", "O", or "draw"
-    val moves: Int,            // total moves in the game
-    val boardSize: Int = 3
+    val mode: String,
+    val winner: String,
+    val moves: Int,
+    val boardSize: Int = 3,
+    val moveHistory: String = "[]"   // JSON array of "row,col" pairs
 )

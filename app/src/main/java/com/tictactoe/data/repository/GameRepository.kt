@@ -6,13 +6,14 @@ import kotlinx.coroutines.flow.Flow
 
 class GameRepository(private val dao: GameDao) {
 
-    suspend fun saveResult(mode: String, winner: String, moves: Int, boardSize: Int) {
+    suspend fun saveResult(mode: String, winner: String, moves: Int, boardSize: Int, moveHistory: String = "[]") {
         dao.insertResult(
             GameResult(
                 mode = mode,
                 winner = winner,
                 moves = moves,
-                boardSize = boardSize
+                boardSize = boardSize,
+                moveHistory = moveHistory
             )
         )
     }
@@ -23,6 +24,8 @@ class GameRepository(private val dao: GameDao) {
     fun getLosses(mode: String): Flow<Int> = dao.getLosses(mode)
     fun getDraws(mode: String): Flow<Int> = dao.getDraws(mode)
     fun getTotalGames(): Flow<Int> = dao.getTotalGames()
+
+    suspend fun getById(id: Long): GameResult? = dao.getById(id)
 
     suspend fun clearAll() = dao.clearAll()
 }

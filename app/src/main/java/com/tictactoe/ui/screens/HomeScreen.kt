@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,8 +40,10 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     onPvPClick: () -> Unit,
     onAIClick: () -> Unit,
+    onOnlineClick: () -> Unit,
     onStatsClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onLeaderboardClick: () -> Unit = {}
 ) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -50,6 +53,7 @@ fun HomeScreen(
 
     val primary = AppConfig.primaryColor()
     val secondary = AppConfig.secondaryColor()
+    val accent = AppConfig.accentColor()
     val textPrimary = AppConfig.textPrimaryColor()
     val textSecondary = AppConfig.textSecondaryColor()
 
@@ -77,6 +81,19 @@ fun HomeScreen(
             Icon(
                 Icons.Default.BarChart,
                 contentDescription = "Stats",
+                tint = textSecondary
+            )
+        }
+
+        IconButton(
+            onClick = onLeaderboardClick,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 56.dp, top = 16.dp)
+        ) {
+            Icon(
+                Icons.Default.EmojiEvents,
+                contentDescription = "Leaderboard",
                 tint = textSecondary
             )
         }
@@ -169,6 +186,29 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                                 NeonButton(text = "START", onClick = onAIClick, color = secondary)
                             }
+                        }
+                    }
+
+                    // Online mode
+                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Online Multiplayer",
+                                color = textPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Play with friends online via room code",
+                                color = textSecondary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            NeonButton(text = "PLAY ONLINE", onClick = onOnlineClick, color = accent)
                         }
                     }
                 }

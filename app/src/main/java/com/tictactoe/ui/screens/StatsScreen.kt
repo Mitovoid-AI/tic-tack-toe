@@ -1,5 +1,6 @@
 package com.tictactoe.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,7 +35,10 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun StatsScreen(onBack: () -> Unit) {
+fun StatsScreen(
+    onBack: () -> Unit,
+    onReplayClick: (Long) -> Unit = {}
+) {
     val repo = TicTacToeApp.instance.gameRepository
     val totalGames by repo.getTotalGames().collectAsState(initial = 0)
     val pvpWins by repo.getWins("pvp").collectAsState(initial = 0)
@@ -70,7 +75,6 @@ fun StatsScreen(onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Total
         Text(
             text = "Total Games: $totalGames",
             color = textPrimary,
@@ -80,7 +84,6 @@ fun StatsScreen(onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stats cards
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -107,7 +110,6 @@ fun StatsScreen(onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Recent games
         Text(
             text = "Recent Games",
             color = textPrimary,
@@ -125,7 +127,10 @@ fun StatsScreen(onBack: () -> Unit) {
         } else {
             LazyColumn {
                 items(recentGames) { game ->
-                    GameHistoryItem(game)
+                    GameHistoryItem(
+                        game = game,
+                        onReplayClick = { onReplayClick(game.id) }
+                    )
                     HorizontalDivider(color = textSecondary.copy(alpha = 0.1f))
                 }
             }
@@ -134,18 +139,24 @@ fun StatsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun GameHistoryItem(game: GameResult) {
+private fun GameHistoryItem(
+    game: GameResult,
+    onReplayClick: () -> Unit
+) {
     val textPrimary = AppConfig.textPrimaryColor()
     val textSecondary = AppConfig.textSecondaryColor()
+    val primary = AppConfig.primaryColor()
     val date = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(game.timestamp))
+    val hasReplay = game.moveHistory != "[]" && game.moveHistory.isNotBlank()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "${game.mode.uppercase()} — ${game.winner.uppercase()}",
                 color = textPrimary,
@@ -153,10 +164,21 @@ private fun GameHistoryItem(game: GameResult) {
             )
             Text(text = date, color = textSecondary, fontSize = 12.sp)
         }
-        Text(
-            text = "${game.moves} moves",
-            color = textSecondary,
-            fontSize = 13.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${game.moves} moves",
+                color = textSecondary,
+                fontSize = 13.sp
+            )
+            if (hasReplay) {
+                IconButton(onClick = onReplayClick) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Replay",
+                        tint = primary
+                    )
+                }
+            }
+        }
     }
 }

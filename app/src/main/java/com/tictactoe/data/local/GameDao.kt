@@ -26,6 +26,9 @@ interface GameDao {
     @Query("SELECT COUNT(*) FROM game_results")
     fun getTotalGames(): Flow<Int>
 
+    @Query("SELECT * FROM game_results WHERE id = :id")
+    suspend fun getById(id: Long): GameResult?
+
     @Query("DELETE FROM game_results")
     suspend fun clearAll()
 }

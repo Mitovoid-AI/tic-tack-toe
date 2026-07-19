@@ -31,12 +31,14 @@ class GameViewModel : ViewModel() {
 
     private val repo = TicTacToeApp.instance.gameRepository
     private val stateHistory = mutableListOf<GameState>()
+    private val moveList = mutableListOf<Pair<Int, Int>>()  // Track moves for replay
 
     fun startGame(mode: String) {
         val boardSize = PrefsManager.boardSize
         val winLength = if (boardSize == 3) 3 else 4
         val firstPlayer = PrefsManager.firstPlayer
         stateHistory.clear()
+        moveList.clear()
         _uiState.update {
             it.copy(
                 mode = mode,
@@ -54,6 +56,7 @@ class GameViewModel : ViewModel() {
         if (current.gameState.isGameOver || current.isAiThinking) return
 
         stateHistory.add(current.gameState)
+        moveList.add(row to col)
         val newState = current.gameState.makeMove(row, col)
         _uiState.update { it.copy(gameState = newState, canUndo = stateHistory.isNotEmpty()) }
 
@@ -75,7 +78,9 @@ class GameViewModel : ViewModel() {
         val stepsBack = if (_uiState.value.mode == "ai" && stateHistory.size >= 2) 2 else 1
         repeat(stepsBack) {
             if (stateHistory.isNotEmpty()) {
-                val previousState = stateHistory.removeAt(stateHistory.lastIndex)
+                stateHistory.removeAt(stateHistory.lastIndex)
+                if (moveList.isNotEmpty()) moveList.removeAt(moveList.lastIndex)
+                val previousState = stateHistory.lastOrNull() ?: GameState()
                 _uiState.update { it.copy(gameState = previousState, canUndo = stateHistory.isNotEmpty()) }
             }
         }
@@ -92,6 +97,7 @@ class GameViewModel : ViewModel() {
             val move = AIPlayer.getMove(state, difficulty)
 
             if (move != null) {
+                moveList.add(move.first to move.second)
                 val newState = state.makeMove(move.first, move.second)
                 _uiState.update { it.copy(gameState = newState, isAiThinking = false) }
 
@@ -124,13 +130,18 @@ class GameViewModel : ViewModel() {
             )
         }
 
+        // Serialize move history as JSON array of "row,col" strings
+        val moveHistoryJson = moveList.joinToString(",") { "\"${it.first},${it.second}\"" }
+        val moveHistoryStr = "[$moveHistoryJson]"
+
         viewModelScope.launch {
             try {
                 repo.saveResult(
                     mode = _uiState.value.mode,
                     winner = winner ?: "draw",
                     moves = state.moveCount,
-                    boardSize = state.boardSize
+                    boardSize = state.boardSize,
+                    moveHistory = moveHistoryStr
                 )
             } catch (_: Exception) {}
         }
@@ -138,6 +149,7 @@ class GameViewModel : ViewModel() {
 
     fun resetBoard() {
         stateHistory.clear()
+        moveList.clear()
         _uiState.update {
             it.copy(
                 gameState = it.gameState.reset(),

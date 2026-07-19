@@ -12,7 +12,6 @@ import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -46,10 +45,6 @@ object UpdateManager {
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * Returns a [UpdateInfo] if a newer version is available, or null if
-     * already up-to-date or the check fails.
-     */
     suspend fun checkForUpdate(context: Context): UpdateInfo? =
         withContext(Dispatchers.IO) {
             try {
@@ -60,14 +55,24 @@ object UpdateManager {
                 val body = response.body?.string() ?: return@withContext null
                 val release = json.decodeFromString<GitHubRelease>(body)
 
-                val currentVersion = getVersionCode(context)
-                val remoteTag = release.tag_name          // e.g. "v1.23"
-                val remoteVersion = remoteTag
+                val remoteTag = release.tag_name  // e.g. "v1.23"
+                val remoteVersionCode = remoteTag
                     .removePrefix("v")
-                    .substringBefore(".")
+                    .replace(".", "")
                     .toIntOrNull() ?: return@withContext null
 
-                if (remoteVersion <= currentVersion) return@withContext null
+                val currentVersionCode = getVersionCode(context)
+
+                // If versionCode is 1 (default), use versionName comparison
+                val isNewer = if (currentVersionCode <= 1) {
+                    val currentName = getVersionName(context) // "1.0.0"
+                    val remoteName = remoteTag.removePrefix("v") // "1.23"
+                    compareVersions(remoteName, currentName) > 0
+                } else {
+                    remoteVersionCode > currentVersionCode
+                }
+
+                if (!isNewer) return@withContext null
 
                 val apkAsset = release.assets.firstOrNull {
                     it.name.endsWith(".apk")
@@ -83,6 +88,18 @@ object UpdateManager {
                 null
             }
         }
+
+    private fun compareVersions(v1: String, v2: String): Int {
+        val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
+        val parts2 = v2.split(".").map { it.toIntOrNull() ?: 0 }
+        val maxLen = maxOf(parts1.size, parts2.size)
+        for (i in 0 until maxLen) {
+            val p1 = parts1.getOrElse(i) { 0 }
+            val p2 = parts2.getOrElse(i) { 0 }
+            if (p1 != p2) return p1 - p2
+        }
+        return 0
+    }
 
     fun getVersionCode(context: Context): Int = try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -103,10 +120,6 @@ object UpdateManager {
             .versionName ?: "1.0.0"
     } catch (_: Exception) { "1.0.0" }
 
-    /**
-     * Downloads the APK via Android DownloadManager and returns the local Uri
-     * once complete so the caller can fire an install intent.
-     */
     suspend fun downloadApk(context: Context, url: String): Uri? {
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
@@ -121,16 +134,17 @@ object UpdateManager {
                 "tic-tac-toe-update.apk"
             )
             .setMimeType("application/vnd.android.package-archive")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
 
         val downloadId = dm.enqueue(request)
 
-        // Suspend until download completes
         return suspendCancellableCoroutine { cont ->
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
                     val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                     if (id == downloadId) {
-                        context.unregisterReceiver(this)
+                        try { context.unregisterReceiver(this) } catch (_: Exception) {}
                         val uri = dm.getUriForDownloadedFile(downloadId)
                         if (cont.isActive) cont.resume(uri)
                     }
