@@ -16,7 +16,7 @@ class RemoteConfigManager(context: Context) {
         private const val TAG = "RemoteConfig"
         private const val PREFS_NAME = "remote_config_cache"
         private const val KEY_CACHED_JSON = "cached_json"
-        private const val CONFIG_URL = "https://raw.githubusercontent.com/anthropics/tic-tac-toe-config/main/config.json"
+        private const val CONFIG_URL = "https://raw.githubusercontent.com/Mitovoid-AI/tic-tack-toe/main/config.json"
         private val json = Json { ignoreUnknownKeys = true }
     }
 
