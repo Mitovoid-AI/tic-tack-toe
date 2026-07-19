@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.sp
 import com.tictactoe.config.AppConfig
 import com.tictactoe.util.UpdateInfo
 import com.tictactoe.util.UpdateManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
@@ -39,18 +41,8 @@ fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
 
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var statusText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-
-    // Simulate progress while downloading
-    LaunchedEffect(isDownloading) {
-        if (isDownloading) {
-            downloadProgress = 0f
-            while (downloadProgress < 0.9f) {
-                delay(300)
-                downloadProgress = (downloadProgress + 0.05f).coerceAtMost(0.9f)
-            }
-        }
-    }
 
     AlertDialog(
         onDismissRequest = { if (!isDownloading) onDismiss() },
@@ -73,19 +65,22 @@ fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
         },
         text = {
             Column {
+                // Show release notes as bullet points (already parsed, max 3, no links)
                 if (updateInfo.releaseNotes.isNotBlank()) {
-                    Text(
-                        text = updateInfo.releaseNotes.take(300),
-                        color = textSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
+                    updateInfo.releaseNotes.split("\n").forEach { point ->
+                        Text(
+                            text = "\u2022 $point",
+                            color = textSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 if (isDownloading) {
                     Text(
-                        text = "Downloading...",
+                        text = statusText,
                         color = textPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
@@ -118,12 +113,31 @@ fun UpdateDialog(updateInfo: UpdateInfo, onDismiss: () -> Unit) {
                     if (isDownloading) return@TextButton
                     isDownloading = true
                     error = null
+                    statusText = "Downloading..."
+
                     scope.launch {
                         try {
-                            val uri = UpdateManager.downloadApk(context, updateInfo.downloadUrl)
-                            if (uri != null) {
+                            // Animate progress bar while downloading
+                            val progressJob = launch {
+                                downloadProgress = 0f
+                                while (downloadProgress < 0.9f) {
+                                    delay(200)
+                                    downloadProgress = (downloadProgress + 0.03f).coerceAtMost(0.9f)
+                                }
+                            }
+
+                            // Actual download on IO thread
+                            val apkFile = withContext(Dispatchers.IO) {
+                                UpdateManager.downloadApk(context, updateInfo.downloadUrl)
+                            }
+
+                            progressJob.cancel()
+                            downloadProgress = 1f
+
+                            if (apkFile != null) {
+                                statusText = "Download complete! Installing..."
                                 delay(500)
-                                UpdateManager.installApk(context, uri)
+                                UpdateManager.installApk(context, apkFile)
                                 onDismiss()
                             } else {
                                 error = "Download failed. Try again."

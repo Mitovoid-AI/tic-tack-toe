@@ -1,23 +1,19 @@
 package com.tictactoe.util
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
 
 @Serializable
 data class GitHubRelease(
@@ -45,6 +41,12 @@ object UpdateManager {
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
+    private val downloadClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
+
     suspend fun checkForUpdate(context: Context): UpdateInfo? =
         withContext(Dispatchers.IO) {
             try {
@@ -55,7 +57,7 @@ object UpdateManager {
                 val body = response.body?.string() ?: return@withContext null
                 val release = json.decodeFromString<GitHubRelease>(body)
 
-                val remoteTag = release.tag_name  // e.g. "v1.23"
+                val remoteTag = release.tag_name
                 val remoteVersionCode = remoteTag
                     .removePrefix("v")
                     .replace(".", "")
@@ -63,10 +65,9 @@ object UpdateManager {
 
                 val currentVersionCode = getVersionCode(context)
 
-                // If versionCode is 1 (default), use versionName comparison
                 val isNewer = if (currentVersionCode <= 1) {
-                    val currentName = getVersionName(context) // "1.0.0"
-                    val remoteName = remoteTag.removePrefix("v") // "1.23"
+                    val currentName = getVersionName(context)
+                    val remoteName = remoteTag.removePrefix("v")
                     compareVersions(remoteName, currentName) > 0
                 } else {
                     remoteVersionCode > currentVersionCode
@@ -78,16 +79,36 @@ object UpdateManager {
                     it.name.endsWith(".apk")
                 } ?: return@withContext null
 
+                // Parse release notes: max 3 bullet points, no links
+                val notes = parseReleaseNotes(release.body)
+
                 UpdateInfo(
                     version = remoteTag,
                     releaseName = release.name,
-                    releaseNotes = release.body,
+                    releaseNotes = notes,
                     downloadUrl = apkAsset.browser_download_url
                 )
             } catch (_: Exception) {
                 null
             }
         }
+
+    private fun parseReleaseNotes(raw: String): String {
+        if (raw.isBlank()) return ""
+        // Extract bullet points (lines starting with - or *)
+        val bullets = raw.lines()
+            .map { it.trim() }
+            .filter { it.startsWith("-") || it.startsWith("*") }
+            .map { it.removePrefix("-").removePrefix("*").trim() }
+            .filter { it.isNotBlank() }
+            // Remove markdown links [text](url)
+            .map { it.replace(Regex("\\[.*?\\]\\(.*?\\)"), "").trim() }
+            // Remove bare URLs
+            .map { it.replace(Regex("https?://\\S+"), "").trim() }
+            .filter { it.isNotBlank() }
+            .take(3)
+        return bullets.joinToString("\n")
+    }
 
     private fun compareVersions(v1: String, v2: String): Int {
         val parts1 = v1.split(".").map { it.toIntOrNull() ?: 0 }
@@ -120,53 +141,42 @@ object UpdateManager {
             .versionName ?: "1.0.0"
     } catch (_: Exception) { "1.0.0" }
 
-    suspend fun downloadApk(context: Context, url: String): Uri? {
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    /**
+     * Downloads APK using OkHttp directly to app's cache directory.
+     * Returns the downloaded File, or null on failure.
+     */
+    suspend fun downloadApk(context: Context, url: String): File? =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url(url).build()
+                val response = downloadClient.newCall(request).execute()
+                if (!response.isSuccessful) return@withContext null
 
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("Tic Tac Toe Update")
-            .setDescription("Downloading update...")
-            .setNotificationVisibility(
-                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-            )
-            .setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "tic-tac-toe-update.apk"
-            )
-            .setMimeType("application/vnd.android.package-archive")
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
-
-        val downloadId = dm.enqueue(request)
-
-        return suspendCancellableCoroutine { cont ->
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context?, intent: Intent?) {
-                    val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                    if (id == downloadId) {
-                        try { context.unregisterReceiver(this) } catch (_: Exception) {}
-                        val uri = dm.getUriForDownloadedFile(downloadId)
-                        if (cont.isActive) cont.resume(uri)
+                val apkFile = File(context.cacheDir, "update.apk")
+                response.body?.byteStream()?.use { input ->
+                    apkFile.outputStream().use { output ->
+                        input.copyTo(output, bufferSize = 8192)
                     }
                 }
-            }
-
-            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                context.registerReceiver(receiver, filter)
-            }
-
-            cont.invokeOnCancellation {
-                try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+                if (apkFile.exists() && apkFile.length() > 0) apkFile else null
+            } catch (_: Exception) {
+                null
             }
         }
-    }
 
-    fun installApk(context: Context, apkUri: Uri) {
+    fun installApk(context: Context, apkFile: File) {
+        val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apkFile
+            )
+        } else {
+            Uri.fromFile(apkFile)
+        }
+
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
