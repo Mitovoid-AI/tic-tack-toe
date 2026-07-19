@@ -2,6 +2,7 @@ package com.tictactoe.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +15,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -38,6 +45,9 @@ import com.tictactoe.TicTacToeApp
 import com.tictactoe.config.AppConfig
 import com.tictactoe.ui.components.GlassCard
 import com.tictactoe.ui.components.NeonButton
+import com.tictactoe.ui.theme.AppTheme
+import com.tictactoe.ui.theme.ThemeManager
+import com.tictactoe.util.PrefsManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -59,6 +69,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -75,6 +86,68 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // Theme Picker
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                Text("Theme", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppTheme.entries.forEach { theme ->
+                        val isSelected = ThemeManager.currentTheme == theme
+                        val themeColors = when (theme) {
+                            AppTheme.NEON -> Triple(Color(0xFF0A0A1A), Color(0xFF00D4FF), Color(0xFFFF006E))
+                            AppTheme.LIGHT -> Triple(Color(0xFFF5F5F5), Color(0xFF1A73E8), Color(0xFFE91E63))
+                            AppTheme.DARK -> Triple(Color(0xFF121212), Color(0xFFBB86FC), Color(0xFF03DAC6))
+                            AppTheme.SYSTEM -> Triple(Color(0xFF0A0A1A), Color(0xFF00D4FF), Color(0xFFFF006E))
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) primary.copy(alpha = 0.15f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) primary else textSecondary.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { ThemeManager.setTheme(theme) }
+                                .padding(12.dp)
+                        ) {
+                            // Theme preview dots
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(Modifier.size(16.dp).clip(CircleShape).background(themeColors.first).border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape))
+                                Box(Modifier.size(16.dp).clip(CircleShape).background(themeColors.second))
+                                Box(Modifier.size(16.dp).clip(CircleShape).background(themeColors.third))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = theme.label,
+                                color = if (isSelected) primary else textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = primary,
+                                    modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Theme preview
         GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -96,12 +169,154 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Board: ${AppConfig.board.size}x${AppConfig.board.size}", color = textSecondary, fontSize = 13.sp)
+                Text("Board: ${PrefsManager.boardSize}x${PrefsManager.boardSize}", color = textSecondary, fontSize = 13.sp)
                 Text("AI Difficulty: ${AppConfig.features.ai_difficulty}", color = textSecondary, fontSize = 13.sp)
+                Text("First Player: ${PrefsManager.firstPlayer}", color = textSecondary, fontSize = 13.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Sound & Haptics
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                Text("Sound & Haptics", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                var soundOn by remember { mutableStateOf(PrefsManager.soundEnabled) }
+                var vibrateOn by remember { mutableStateOf(PrefsManager.vibrateEnabled) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sound Effects", color = textPrimary, fontSize = 14.sp)
+                    Switch(
+                        checked = soundOn,
+                        onCheckedChange = {
+                            soundOn = it
+                            PrefsManager.soundEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = primary,
+                            checkedTrackColor = primary.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Vibration", color = textPrimary, fontSize = 14.sp)
+                    Switch(
+                        checked = vibrateOn,
+                        onCheckedChange = {
+                            vibrateOn = it
+                            PrefsManager.vibrateEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = primary,
+                            checkedTrackColor = primary.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Game Settings
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                Text("Game Settings", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Board size
+                Text("Board Size", color = textSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var selectedSize by remember { mutableStateOf(PrefsManager.boardSize) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    listOf(3, 4, 5).forEach { size ->
+                        val isSelected = selectedSize == size
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) primary.copy(alpha = 0.2f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) primary else textSecondary.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    selectedSize = size
+                                    PrefsManager.boardSize = size
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${size}x${size}",
+                                color = if (isSelected) primary else textSecondary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // First player
+                Text("First Player", color = textSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var selectedPlayer by remember { mutableStateOf(PrefsManager.firstPlayer) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    listOf("X" to primary, "O" to secondary).forEach { (player, color) ->
+                        val isSelected = selectedPlayer == player
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) color.copy(alpha = 0.2f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) color else textSecondary.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    selectedPlayer = player
+                                    PrefsManager.firstPlayer = player
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = player,
+                                color = if (isSelected) color else textSecondary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Actions
         GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -138,7 +353,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // App info
         GlassCard(modifier = Modifier.fillMaxWidth()) {

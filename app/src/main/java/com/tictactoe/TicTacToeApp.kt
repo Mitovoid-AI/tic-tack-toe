@@ -4,6 +4,10 @@ import android.app.Application
 import com.tictactoe.config.RemoteConfigManager
 import com.tictactoe.data.local.AppDatabase
 import com.tictactoe.data.repository.GameRepository
+import com.tictactoe.ui.theme.ThemeManager
+import com.tictactoe.util.HapticManager
+import com.tictactoe.util.PrefsManager
+import com.tictactoe.util.SoundManager
 
 class TicTacToeApp : Application() {
 
@@ -17,6 +21,10 @@ class TicTacToeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        ThemeManager.init(this)
+        PrefsManager.init(this)
+        HapticManager.init(this)
+        SoundManager.init(this)
         remoteConfigManager = RemoteConfigManager(this)
         database = AppDatabase.create(this)
         gameRepository = GameRepository(database.gameDao())

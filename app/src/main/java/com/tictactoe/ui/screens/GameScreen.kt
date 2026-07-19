@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -157,12 +158,27 @@ fun GameScreen(
             }
 
             if (!game.isGameOver) {
-                IconButton(onClick = { viewModel.resetBoard() }) {
-                    Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = "Reset",
-                        tint = textSecondary
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.undo() },
+                        enabled = state.canUndo
+                    ) {
+                        Icon(
+                            Icons.Default.Undo,
+                            contentDescription = "Undo",
+                            tint = if (state.canUndo) textSecondary else textSecondary.copy(alpha = 0.3f)
+                        )
+                    }
+                    IconButton(onClick = { viewModel.resetBoard() }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reset",
+                            tint = textSecondary
+                        )
+                    }
                 }
             }
         }
