@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -167,7 +167,7 @@ fun GameScreen(
                         enabled = state.canUndo
                     ) {
                         Icon(
-                            Icons.Default.Undo,
+                            Icons.Default.Replay,
                             contentDescription = "Undo",
                             tint = if (state.canUndo) textSecondary else textSecondary.copy(alpha = 0.3f)
                         )
