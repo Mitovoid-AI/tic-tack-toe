@@ -7,12 +7,14 @@ import com.tictactoe.config.AppConfig
 import com.tictactoe.util.HapticManager
 import com.tictactoe.util.PrefsManager
 import com.tictactoe.util.SoundManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class GameUiState(
     val gameState: GameState = GameState(),
@@ -31,12 +33,14 @@ class GameViewModel : ViewModel() {
 
     private val repo = TicTacToeApp.instance.gameRepository
     private val stateHistory = mutableListOf<GameState>()
-    private val moveList = mutableListOf<Pair<Int, Int>>()  // Track moves for replay
+    private val moveList = mutableListOf<Pair<Int, Int>>()
+    private var aiSymbol = "O"
 
     fun startGame(mode: String) {
         val boardSize = PrefsManager.boardSize
         val winLength = if (boardSize == 3) 3 else 4
         val firstPlayer = PrefsManager.firstPlayer
+        aiSymbol = if (firstPlayer == "X") "O" else "X"
         stateHistory.clear()
         moveList.clear()
         _uiState.update {
@@ -46,7 +50,8 @@ class GameViewModel : ViewModel() {
                 scoreX = 0,
                 scoreO = 0,
                 scoreDraw = 0,
-                canUndo = false
+                canUndo = false,
+                isAiThinking = false
             )
         }
     }
@@ -55,10 +60,13 @@ class GameViewModel : ViewModel() {
         val current = _uiState.value
         if (current.gameState.isGameOver || current.isAiThinking) return
 
+        // Bug fix: validate move BEFORE modifying history
+        val newState = current.gameState.makeMove(row, col)
+        if (newState === current.gameState) return // No-op (cell occupied or out of bounds)
+
         stateHistory.add(current.gameState)
         moveList.add(row to col)
-        val newState = current.gameState.makeMove(row, col)
-        _uiState.update { it.copy(gameState = newState, canUndo = stateHistory.isNotEmpty()) }
+        _uiState.update { it.copy(gameState = newState, canUndo = true) }
 
         try { SoundManager.playTap() } catch (_: Exception) {}
         try { HapticManager.lightTap() } catch (_: Exception) {}
@@ -68,22 +76,33 @@ class GameViewModel : ViewModel() {
             return
         }
 
-        if (current.mode == "ai" && newState.currentPlayer == "O") {
+        // AI turn: trigger for whichever symbol the AI plays
+        if (current.mode == "ai" && newState.currentPlayer == aiSymbol) {
             triggerAiMove()
         }
     }
 
     fun undo() {
+        // Bug fix: guard against undo during AI thinking
+        if (_uiState.value.isAiThinking) return
         if (stateHistory.isEmpty()) return
-        val stepsBack = if (_uiState.value.mode == "ai" && stateHistory.size >= 2) 2 else 1
+
+        val mode = _uiState.value.mode
+        val stepsBack = if (mode == "ai" && stateHistory.size >= 2) 2 else 1
+
         repeat(stepsBack) {
             if (stateHistory.isNotEmpty()) {
                 stateHistory.removeAt(stateHistory.lastIndex)
                 if (moveList.isNotEmpty()) moveList.removeAt(moveList.lastIndex)
-                val previousState = stateHistory.lastOrNull() ?: GameState()
-                _uiState.update { it.copy(gameState = previousState, canUndo = stateHistory.isNotEmpty()) }
             }
         }
+
+        // Bug fix: restore the correct state (the one on top after removals)
+        val boardSize = _uiState.value.gameState.boardSize
+        val winLength = _uiState.value.gameState.winLength
+        val restoredState = stateHistory.lastOrNull()
+            ?: GameState(boardSize = boardSize, winLength = winLength)
+        _uiState.update { it.copy(gameState = restoredState, canUndo = stateHistory.isNotEmpty()) }
     }
 
     private fun triggerAiMove() {
@@ -92,12 +111,24 @@ class GameViewModel : ViewModel() {
         viewModelScope.launch {
             delay(300)
 
-            val state = _uiState.value.gameState
+            // Bug fix: check state hasn't changed during delay
+            val currentState = _uiState.value
+            if (currentState.gameState.isGameOver || !currentState.isAiThinking) return@launch
+
+            val state = currentState.gameState
             val difficulty = AppConfig.features.ai_difficulty
-            val move = AIPlayer.getMove(state, difficulty)
+
+            // Bug fix: run AI on background thread to avoid blocking UI on 4x4/5x5
+            val move = withContext(Dispatchers.Default) {
+                AIPlayer.getMove(state, difficulty, aiSymbol)
+            }
 
             if (move != null) {
+                // Bug fix: add AI move to history BEFORE applying it
+                val preAiState = state
+                stateHistory.add(preAiState)
                 moveList.add(move.first to move.second)
+
                 val newState = state.makeMove(move.first, move.second)
                 _uiState.update { it.copy(gameState = newState, isAiThinking = false) }
 
@@ -130,7 +161,6 @@ class GameViewModel : ViewModel() {
             )
         }
 
-        // Serialize move history as JSON array of "row,col" strings
         val moveHistoryJson = moveList.joinToString(",") { "\"${it.first},${it.second}\"" }
         val moveHistoryStr = "[$moveHistoryJson]"
 

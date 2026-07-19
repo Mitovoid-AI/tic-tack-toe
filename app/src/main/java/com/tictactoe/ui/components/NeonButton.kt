@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -29,14 +30,17 @@ fun NeonButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    color: Color = AppConfig.primaryColor()
+    color: Color = AppConfig.primaryColor(),
+    enabled: Boolean = true
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "btn_scale")
+    val alpha = if (enabled) 1f else 0.4f
 
     Box(
         modifier = modifier
+            .alpha(alpha)
             .scale(scale)
             .clip(RoundedCornerShape(12.dp))
             .background(
@@ -54,7 +58,11 @@ fun NeonButton(
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled
+            ) { onClick() }
             .padding(horizontal = 24.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {

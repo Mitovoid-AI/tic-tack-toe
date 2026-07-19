@@ -12,6 +12,7 @@ data class GameState(
     val isGameOver: Boolean = false
 ) {
     fun makeMove(row: Int, col: Int): GameState {
+        if (row !in 0 until boardSize || col !in 0 until boardSize) return this
         if (board[row][col].isNotEmpty() || isGameOver) return this
 
         val newBoard = board.mapIndexed { r, rowList ->
