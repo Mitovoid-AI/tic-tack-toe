@@ -21,7 +21,7 @@ data class OnlineGame(
     val playerO: String = "",
     val winner: String = "",
     val isDraw: Boolean = false,
-    val status: String = "waiting" // waiting, playing, finished
+    val status: String = "waiting"
 )
 
 object MultiplayerManager {
@@ -43,76 +43,93 @@ object MultiplayerManager {
     }
 
     fun createRoom(boardSize: Int, callback: (String) -> Unit) {
-        val db = database ?: return
-        val roomCode = generateRoomCode()
-        val board = List(boardSize) { List(boardSize) { "" } }
+        try {
+            val db = database ?: run { callback(""); return }
+            val roomCode = generateRoomCode()
+            val board = List(boardSize) { List(boardSize) { "" } }
 
-        val game = mapOf(
-            "roomCode" to roomCode,
-            "boardSize" to boardSize,
-            "board" to board.flatten().joinToString(","),
-            "currentPlayer" to "X",
-            "playerX" to playerId,
-            "playerO" to "",
-            "winner" to "",
-            "isDraw" to false,
-            "status" to "waiting"
-        )
+            val game = mapOf(
+                "roomCode" to roomCode,
+                "boardSize" to boardSize,
+                "board" to board.flatten().joinToString(","),
+                "currentPlayer" to "X",
+                "playerX" to playerId,
+                "playerO" to "",
+                "winner" to "",
+                "isDraw" to false,
+                "status" to "waiting"
+            )
 
-        db.getReference("rooms").child(roomCode).setValue(game)
-            .addOnSuccessListener { callback(roomCode) }
-            .addOnFailureListener { callback("") }
+            db.getReference("rooms").child(roomCode).setValue(game)
+                .addOnSuccessListener { callback(roomCode) }
+                .addOnFailureListener { callback("") }
+        } catch (_: Exception) {
+            callback("")
+        }
     }
 
     fun joinRoom(roomCode: String, callback: (Boolean) -> Unit) {
-        val db = database ?: run { callback(false); return }
-        val ref = db.getReference("rooms").child(roomCode)
+        try {
+            val db = database ?: run { callback(false); return }
+            val ref = db.getReference("rooms").child(roomCode)
 
-        ref.child("playerO").get().addOnSuccessListener { snapshot ->
-            val current = snapshot.getValue(String::class.java) ?: ""
-            if (current.isEmpty()) {
-                ref.child("playerO").setValue(playerId)
-                ref.child("status").setValue("playing")
-                callback(true)
-            } else {
-                callback(false) // Room full
-            }
-        }.addOnFailureListener { callback(false) }
+            ref.child("playerO").get().addOnSuccessListener { snapshot ->
+                try {
+                    val current = snapshot.getValue(String::class.java) ?: ""
+                    if (current.isEmpty()) {
+                        ref.child("playerO").setValue(playerId)
+                        ref.child("status").setValue("playing")
+                        callback(true)
+                    } else {
+                        callback(false)
+                    }
+                } catch (_: Exception) {
+                    callback(false)
+                }
+            }.addOnFailureListener { callback(false) }
+        } catch (_: Exception) {
+            callback(false)
+        }
     }
 
     fun makeMove(roomCode: String, row: Int, col: Int) {
-        val db = database ?: return
-        val ref = db.getReference("rooms").child(roomCode)
+        try {
+            val db = database ?: return
+            val ref = db.getReference("rooms").child(roomCode)
 
-        ref.get().addOnSuccessListener { snapshot ->
-            val boardStr = snapshot.child("board").getValue(String::class.java) ?: return@addOnSuccessListener
-            val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
-            val currentPlayer = snapshot.child("currentPlayer").getValue(String::class.java) ?: "X"
+            ref.get().addOnSuccessListener { snapshot ->
+                try {
+                    val boardStr = snapshot.child("board").getValue(String::class.java) ?: return@addOnSuccessListener
+                    val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
+                    val currentPlayer = snapshot.child("currentPlayer").getValue(String::class.java) ?: "X"
 
-            val cells = boardStr.split(",").toMutableList()
-            val index = row * boardSize + col
+                    val cells = boardStr.split(",").toMutableList()
+                    if (cells.size != boardSize * boardSize) return@addOnSuccessListener
 
-            if (cells[index].isNotEmpty()) return@addOnSuccessListener
+                    val index = row * boardSize + col
+                    if (index !in cells.indices) return@addOnSuccessListener
+                    if (cells[index].isNotEmpty()) return@addOnSuccessListener
 
-            cells[index] = currentPlayer
-            val nextPlayer = if (currentPlayer == "X") "O" else "X"
+                    cells[index] = currentPlayer
+                    val nextPlayer = if (currentPlayer == "X") "O" else "X"
 
-            // Check win
-            val board = List(boardSize) { r -> List(boardSize) { c -> cells[r * boardSize + c] } }
-            val hasWon = checkWin(board, row, col, currentPlayer, boardSize)
-            val isFull = cells.none { it.isEmpty() }
-            val isDraw = !hasWon && isFull
+                    val board = List(boardSize) { r -> List(boardSize) { c -> cells[r * boardSize + c] } }
+                    val hasWon = checkWin(board, row, col, currentPlayer, boardSize)
+                    val isFull = cells.none { it.isEmpty() }
+                    val isDraw = !hasWon && isFull
 
-            val updates = mapOf(
-                "board" to cells.joinToString(","),
-                "currentPlayer" to if (hasWon || isDraw) currentPlayer else nextPlayer,
-                "winner" to if (hasWon) currentPlayer else "",
-                "isDraw" to isDraw,
-                "status" to if (hasWon || isDraw) "finished" else "playing"
-            )
+                    val updates = mapOf(
+                        "board" to cells.joinToString(","),
+                        "currentPlayer" to if (hasWon || isDraw) currentPlayer else nextPlayer,
+                        "winner" to if (hasWon) currentPlayer else "",
+                        "isDraw" to isDraw,
+                        "status" to if (hasWon || isDraw) "finished" else "playing"
+                    )
 
-            ref.updateChildren(updates)
-        }
+                    ref.updateChildren(updates)
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
     }
 
     fun observeRoom(roomCode: String): Flow<OnlineGame> = callbackFlow {
@@ -121,23 +138,29 @@ object MultiplayerManager {
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val boardStr = snapshot.child("board").getValue(String::class.java) ?: ""
-                val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
-                val cells = boardStr.split(",")
-                val board = List(boardSize) { r -> List(boardSize) { c -> cells.getOrElse(r * boardSize + c) { "" } } }
+                try {
+                    val boardStr = snapshot.child("board").getValue(String::class.java) ?: ""
+                    val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
+                    val cells = boardStr.split(",")
+                    val board = List(boardSize) { r ->
+                        List(boardSize) { c ->
+                            cells.getOrElse(r * boardSize + c) { "" }
+                        }
+                    }
 
-                val game = OnlineGame(
-                    roomCode = roomCode,
-                    boardSize = boardSize,
-                    board = board,
-                    currentPlayer = snapshot.child("currentPlayer").getValue(String::class.java) ?: "X",
-                    playerX = snapshot.child("playerX").getValue(String::class.java) ?: "",
-                    playerO = snapshot.child("playerO").getValue(String::class.java) ?: "",
-                    winner = snapshot.child("winner").getValue(String::class.java) ?: "",
-                    isDraw = snapshot.child("isDraw").getValue(Boolean::class.java) ?: false,
-                    status = snapshot.child("status").getValue(String::class.java) ?: "waiting"
-                )
-                trySend(game)
+                    val game = OnlineGame(
+                        roomCode = roomCode,
+                        boardSize = boardSize,
+                        board = board,
+                        currentPlayer = snapshot.child("currentPlayer").getValue(String::class.java) ?: "X",
+                        playerX = snapshot.child("playerX").getValue(String::class.java) ?: "",
+                        playerO = snapshot.child("playerO").getValue(String::class.java) ?: "",
+                        winner = snapshot.child("winner").getValue(String::class.java) ?: "",
+                        isDraw = snapshot.child("isDraw").getValue(Boolean::class.java) ?: false,
+                        status = snapshot.child("status").getValue(String::class.java) ?: "waiting"
+                    )
+                    trySend(game)
+                } catch (_: Exception) {}
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -167,6 +190,8 @@ object MultiplayerManager {
     }
 
     fun deleteRoom(roomCode: String) {
-        database?.getReference("rooms")?.child(roomCode)?.removeValue()
+        try {
+            database?.getReference("rooms")?.child(roomCode)?.removeValue()
+        } catch (_: Exception) {}
     }
 }

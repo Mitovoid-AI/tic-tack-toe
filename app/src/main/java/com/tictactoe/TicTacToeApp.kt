@@ -29,9 +29,19 @@ class TicTacToeApp : Application() {
         try { SoundManager.init(this) } catch (_: Exception) {}
         try { MarkerManager.init(this) } catch (_: Exception) {}
 
-        remoteConfigManager = RemoteConfigManager(this)
-        database = AppDatabase.create(this)
-        gameRepository = GameRepository(database.gameDao())
+        try {
+            remoteConfigManager = RemoteConfigManager(this)
+            database = AppDatabase.create(this)
+            gameRepository = GameRepository(database.gameDao())
+        } catch (e: Exception) {
+            // If DB fails, try with fresh database
+            try {
+                deleteDatabase("tictactoe.db")
+                database = AppDatabase.create(this)
+                gameRepository = GameRepository(database.gameDao())
+                remoteConfigManager = RemoteConfigManager(this)
+            } catch (_: Exception) {}
+        }
     }
 
     companion object {

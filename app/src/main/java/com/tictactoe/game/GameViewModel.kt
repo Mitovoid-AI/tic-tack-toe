@@ -31,15 +31,15 @@ class GameViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
-    private val repo = TicTacToeApp.instance.gameRepository
+    private val repo = try { TicTacToeApp.instance.gameRepository } catch (_: Exception) { null }
     private val stateHistory = mutableListOf<GameState>()
     private val moveList = mutableListOf<Pair<Int, Int>>()
     private var aiSymbol = "O"
 
     fun startGame(mode: String) {
-        val boardSize = PrefsManager.boardSize
+        val boardSize = try { PrefsManager.boardSize.coerceIn(3, 5) } catch (_: Exception) { 3 }
         val winLength = if (boardSize == 3) 3 else 4
-        val firstPlayer = PrefsManager.firstPlayer
+        val firstPlayer = try { PrefsManager.firstPlayer } catch (_: Exception) { "X" }
         aiSymbol = if (firstPlayer == "X") "O" else "X"
         stateHistory.clear()
         moveList.clear()
@@ -60,9 +60,14 @@ class GameViewModel : ViewModel() {
         val current = _uiState.value
         if (current.gameState.isGameOver || current.isAiThinking) return
 
-        // Bug fix: validate move BEFORE modifying history
-        val newState = current.gameState.makeMove(row, col)
-        if (newState === current.gameState) return // No-op (cell occupied or out of bounds)
+        val newState = try {
+            current.gameState.makeMove(row, col)
+        } catch (_: Exception) {
+            return
+        }
+
+        // No-op if cell already occupied or out of bounds
+        if (newState === current.gameState) return
 
         stateHistory.add(current.gameState)
         moveList.add(row to col)
@@ -76,14 +81,13 @@ class GameViewModel : ViewModel() {
             return
         }
 
-        // AI turn: trigger for whichever symbol the AI plays
+        // AI turn
         if (current.mode == "ai" && newState.currentPlayer == aiSymbol) {
             triggerAiMove()
         }
     }
 
     fun undo() {
-        // Bug fix: guard against undo during AI thinking
         if (_uiState.value.isAiThinking) return
         if (stateHistory.isEmpty()) return
 
@@ -97,7 +101,6 @@ class GameViewModel : ViewModel() {
             }
         }
 
-        // Bug fix: restore the correct state (the one on top after removals)
         val boardSize = _uiState.value.gameState.boardSize
         val winLength = _uiState.value.gameState.winLength
         val restoredState = stateHistory.lastOrNull()
@@ -109,33 +112,37 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(isAiThinking = true) }
 
         viewModelScope.launch {
-            delay(300)
+            try {
+                delay(300)
 
-            // Bug fix: check state hasn't changed during delay
-            val currentState = _uiState.value
-            if (currentState.gameState.isGameOver || !currentState.isAiThinking) return@launch
+                val currentState = _uiState.value
+                if (currentState.gameState.isGameOver || !currentState.isAiThinking) return@launch
 
-            val state = currentState.gameState
-            val difficulty = AppConfig.features.ai_difficulty
+                val state = currentState.gameState
+                val difficulty = try { AppConfig.features.ai_difficulty } catch (_: Exception) { "medium" }
 
-            // Bug fix: run AI on background thread to avoid blocking UI on 4x4/5x5
-            val move = withContext(Dispatchers.Default) {
-                AIPlayer.getMove(state, difficulty, aiSymbol)
-            }
-
-            if (move != null) {
-                // Bug fix: add AI move to history BEFORE applying it
-                val preAiState = state
-                stateHistory.add(preAiState)
-                moveList.add(move.first to move.second)
-
-                val newState = state.makeMove(move.first, move.second)
-                _uiState.update { it.copy(gameState = newState, isAiThinking = false) }
-
-                if (newState.isGameOver) {
-                    onGameEnd(newState)
+                val move = withContext(Dispatchers.Default) {
+                    try {
+                        AIPlayer.getMove(state, difficulty, aiSymbol)
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
-            } else {
+
+                if (move != null) {
+                    stateHistory.add(state)
+                    moveList.add(move.first to move.second)
+
+                    val newState = state.makeMove(move.first, move.second)
+                    _uiState.update { it.copy(gameState = newState, isAiThinking = false) }
+
+                    if (newState.isGameOver) {
+                        onGameEnd(newState)
+                    }
+                } else {
+                    _uiState.update { it.copy(isAiThinking = false) }
+                }
+            } catch (_: Exception) {
                 _uiState.update { it.copy(isAiThinking = false) }
             }
         }
@@ -166,7 +173,7 @@ class GameViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                repo.saveResult(
+                repo?.saveResult(
                     mode = _uiState.value.mode,
                     winner = winner ?: "draw",
                     moves = state.moveCount,
