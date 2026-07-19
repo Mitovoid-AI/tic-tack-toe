@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Autorenew
@@ -39,7 +38,7 @@ import com.tictactoe.game.GameViewModel
 import com.tictactoe.ui.components.GameBoard
 import com.tictactoe.ui.components.NeonButton
 import com.tictactoe.ui.components.ScoreBoard
-import kotlinx.coroutines.delay
+import com.tictactoe.ui.components.WinnerCelebration
 
 @Composable
 fun GameScreen(
@@ -54,12 +53,22 @@ fun GameScreen(
     val state by viewModel.uiState.collectAsState()
     val game = state.gameState
 
+    var showCelebration by remember { mutableStateOf(false) }
+    var lastGameOverState by remember { mutableStateOf(false) }
+
+    // Trigger celebration when game transitions to over
+    LaunchedEffect(game.isGameOver) {
+        if (game.isGameOver && !lastGameOverState) {
+            showCelebration = true
+        }
+        lastGameOverState = game.isGameOver
+    }
+
     val textPrimary = AppConfig.textPrimaryColor()
     val textSecondary = AppConfig.textSecondaryColor()
     val primary = AppConfig.primaryColor()
     val secondary = AppConfig.secondaryColor()
 
-    // Status text
     val statusText = when {
         game.isGameOver && game.winner != null -> {
             if (mode == "ai") {
@@ -152,8 +161,14 @@ fun GameScreen(
                 enter = scaleIn() + fadeIn()
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    NeonButton(text = "REMATCH", onClick = { viewModel.resetBoard() }, color = primary)
-                    NeonButton(text = "RESET", onClick = { viewModel.resetScores() }, color = secondary)
+                    NeonButton(text = "REMATCH", onClick = {
+                        showCelebration = false
+                        viewModel.resetBoard()
+                    }, color = primary)
+                    NeonButton(text = "RESET", onClick = {
+                        showCelebration = false
+                        viewModel.resetScores()
+                    }, color = secondary)
                 }
             }
 
@@ -181,6 +196,15 @@ fun GameScreen(
                     }
                 }
             }
+        }
+
+        // Winner celebration overlay
+        if (showCelebration) {
+            WinnerCelebration(
+                winner = game.winner ?: "",
+                isDraw = game.isDraw,
+                onDismiss = { showCelebration = false }
+            )
         }
     }
 }
