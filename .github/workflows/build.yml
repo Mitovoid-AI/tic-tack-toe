@@ -29,11 +29,14 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/tic-tac-toe.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tic-tac-toe-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: tic-tac-toe
+          path: app/build/outputs/apk/debug/tic-tac-toe.apk
 
       - name: Get version name
         id: version
@@ -46,6 +49,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: "${{ steps.version.outputs.tag }} (${{ steps.version.outputs.date }})"
-          files: app/build/outputs/apk/debug/app-debug.apk
+          name: "Tic Tac Toe ${{ steps.version.outputs.tag }} (${{ steps.version.outputs.date }})"
+          files: app/build/outputs/apk/debug/tic-tac-toe.apk
           generate_release_notes: true
