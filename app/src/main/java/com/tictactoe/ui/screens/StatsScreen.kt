@@ -1,6 +1,5 @@
 package com.tictactoe.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,10 +33,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun StatsScreen(
-    onBack: () -> Unit,
-    onReplayClick: (Long) -> Unit = {}
-) {
+fun StatsScreen(onBack: () -> Unit) {
     val repo = TicTacToeApp.instance.gameRepository
     val totalGames by repo.getTotalGames().collectAsState(initial = 0)
     val pvpWins by repo.getWins("pvp").collectAsState(initial = 0)
@@ -59,7 +54,6 @@ fun StatsScreen(
             .fillMaxSize()
             .padding(24.dp)
     ) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = textSecondary)
@@ -127,10 +121,7 @@ fun StatsScreen(
         } else {
             LazyColumn {
                 items(recentGames) { game ->
-                    GameHistoryItem(
-                        game = game,
-                        onReplayClick = { onReplayClick(game.id) }
-                    )
+                    GameHistoryItem(game)
                     HorizontalDivider(color = textSecondary.copy(alpha = 0.1f))
                 }
             }
@@ -139,24 +130,18 @@ fun StatsScreen(
 }
 
 @Composable
-private fun GameHistoryItem(
-    game: GameResult,
-    onReplayClick: () -> Unit
-) {
+private fun GameHistoryItem(game: GameResult) {
     val textPrimary = AppConfig.textPrimaryColor()
     val textSecondary = AppConfig.textSecondaryColor()
-    val primary = AppConfig.primaryColor()
     val date = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(game.timestamp))
-    val hasReplay = game.moveHistory != "[]" && game.moveHistory.isNotBlank()
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column {
             Text(
                 text = "${game.mode.uppercase()} — ${game.winner.uppercase()}",
                 color = textPrimary,
@@ -164,21 +149,10 @@ private fun GameHistoryItem(
             )
             Text(text = date, color = textSecondary, fontSize = 12.sp)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "${game.moves} moves",
-                color = textSecondary,
-                fontSize = 13.sp
-            )
-            if (hasReplay) {
-                IconButton(onClick = onReplayClick) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Replay",
-                        tint = primary
-                    )
-                }
-            }
-        }
+        Text(
+            text = "${game.moves} moves",
+            color = textSecondary,
+            fontSize = 13.sp
+        )
     }
 }

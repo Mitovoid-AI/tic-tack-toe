@@ -57,21 +57,11 @@ object UpdateManager {
                 val body = response.body?.string() ?: return@withContext null
                 val release = json.decodeFromString<GitHubRelease>(body)
 
-                val remoteTag = release.tag_name
-                val remoteVersionCode = remoteTag
-                    .removePrefix("v")
-                    .replace(".", "")
-                    .toIntOrNull() ?: return@withContext null
+                val remoteTag = release.tag_name  // e.g. "v1.19"
+                val currentName = getVersionName(context) // e.g. "1.19"
+                val remoteName = remoteTag.removePrefix("v") // e.g. "1.19"
 
-                val currentVersionCode = getVersionCode(context)
-
-                val isNewer = if (currentVersionCode <= 1) {
-                    val currentName = getVersionName(context)
-                    val remoteName = remoteTag.removePrefix("v")
-                    compareVersions(remoteName, currentName) > 0
-                } else {
-                    remoteVersionCode > currentVersionCode
-                }
+                val isNewer = compareVersions(remoteName, currentName) > 0
 
                 if (!isNewer) return@withContext null
 

@@ -55,7 +55,7 @@ fun CellView(
     }
 
     // Check if marker is a single emoji (multi-char Unicode) or plain text
-    val isEmoji = markerText.length > 1 || markerText.codePointAt(0) > 127
+    val isEmoji = markerText.isNotEmpty() && (markerText.length > 1 || markerText.codePointAt(0) > 127)
 
     val markerColor = when (value) {
         "X" -> if (isWinning) AppConfig.accentColor() else primaryColor

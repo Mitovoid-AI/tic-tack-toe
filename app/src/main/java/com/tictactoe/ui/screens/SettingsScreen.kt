@@ -436,7 +436,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Text("About", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Tic Tac Toe — Neon Edition", color = textSecondary, fontSize = 13.sp)
-                Text("Version 1.0.0", color = textSecondary, fontSize = 13.sp)
+                val version = try {
+                    val pInfo = com.tictactoe.TicTacToeApp.instance.packageManager.getPackageInfo(com.tictactoe.TicTacToeApp.instance.packageName, 0)
+                    "v${pInfo.versionName}"
+                } catch (_: Exception) { "v1.23" }
+                Text("Version $version", color = textSecondary, fontSize = 13.sp)
             }
         }
     }

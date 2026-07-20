@@ -1,5 +1,8 @@
 package com.tictactoe.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tictactoe.config.AppConfig
@@ -55,15 +59,14 @@ fun OnlineGameScreen(
     var showCelebration by remember { mutableStateOf(false) }
     var lastStatus by remember { mutableStateOf("waiting") }
 
-    // Trigger celebration on game end
-    if (game.status == "finished" && lastStatus == "playing") {
+    // Trigger celebration on tournament finish
+    if (game.status == "tournament_finished" && lastStatus != "tournament_finished") {
         showCelebration = true
     }
     lastStatus = game.status
 
-    // Convert online board to GameState for GameBoard composable
     val boardSize = game.boardSize
-    val gameState = remember(game) {
+    val gameState = remember(game.board, game.winner, game.isDraw) {
         var state = GameState(boardSize = boardSize, winLength = if (boardSize == 3) 3 else 4)
         for (r in 0 until boardSize) {
             for (c in 0 until boardSize) {
@@ -78,18 +81,42 @@ fun OnlineGameScreen(
 
     val statusText = when {
         game.status == "waiting" -> "Waiting for opponent..."
-        game.isDraw -> "It's a Draw!"
-        game.winner == mySymbol -> "You Win!"
-        game.winner.isNotEmpty() -> "You Lose!"
+        game.status == "tournament_finished" -> {
+            val winner = when {
+                game.scoreX > game.scoreO -> if (amX) "You Win!" else "You Lose!"
+                game.scoreO > game.scoreX -> if (!amX) "You Win!" else "You Lose!"
+                else -> "Tied!"
+            }
+            winner
+        }
+        game.status == "round_finished" -> {
+            val roundWinner = game.winner
+            when {
+                roundWinner == mySymbol -> "You win this round!"
+                game.isDraw -> "Round draw!"
+                else -> "Opponent wins this round!"
+            }
+        }
         isMyTurn -> "Your Turn ($mySymbol)"
         else -> "Opponent's Turn"
     }
 
     val statusColor = when {
-        game.status == "waiting" -> textSecondary
-        game.winner == mySymbol -> primary
-        game.winner.isNotEmpty() -> secondary
-        game.isDraw -> textSecondary
+        game.status == "tournament_finished" -> {
+            when {
+                game.scoreX > game.scoreO -> if (amX) primary else secondary
+                game.scoreO > game.scoreX -> if (!amX) primary else secondary
+                else -> textSecondary
+            }
+        }
+        game.status == "round_finished" -> {
+            val roundWinner = game.winner
+            when {
+                roundWinner == mySymbol -> primary
+                game.isDraw -> textSecondary
+                else -> secondary
+            }
+        }
         isMyTurn -> primary
         else -> secondary
     }
@@ -114,34 +141,79 @@ fun OnlineGameScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Room code
             Text(
                 text = "Room: $roomCode",
                 color = textSecondary,
-                fontSize = 14.sp,
-                letterSpacing = 3.sp
+                fontSize = 13.sp,
+                letterSpacing = 2.sp
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            // Round info
             Text(
-                text = "You are $mySymbol",
-                color = if (amX) primary else secondary,
-                fontSize = 13.sp,
+                text = "Round ${game.currentRound} of ${game.totalRounds}",
+                color = textPrimary,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Score
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (amX) "You (X)" else "Opponent (X)",
+                        color = primary.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "${game.scoreX}",
+                        color = primary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = " — ",
+                    color = textSecondary,
+                    fontSize = 24.sp
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (!amX) "You (O)" else "Opponent (O)",
+                        color = secondary.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "${game.scoreO}",
+                        color = secondary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Status
+            Text(
+                text = statusText,
+                color = statusColor,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = statusText,
-                color = statusColor,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+            // Board
             GameBoard(
                 gameState = gameState,
                 onCellClick = { row, col ->
@@ -154,22 +226,47 @@ fun OnlineGameScreen(
                     .aspectRatio(1f)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            if (game.status == "finished") {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    NeonButton(text = "BACK", onClick = {
+            // Actions
+            AnimatedVisibility(
+                visible = game.status == "round_finished",
+                enter = scaleIn() + fadeIn()
+            ) {
+                NeonButton(
+                    text = if (isCreator) "NEXT ROUND" else "WAITING FOR HOST...",
+                    onClick = {
+                        if (isCreator) MultiplayerManager.nextRound(roomCode)
+                    },
+                    color = primary,
+                    enabled = isCreator
+                )
+            }
+
+            AnimatedVisibility(
+                visible = game.status == "tournament_finished",
+                enter = scaleIn() + fadeIn()
+            ) {
+                NeonButton(
+                    text = "BACK TO LOBBY",
+                    onClick = {
                         if (isCreator) MultiplayerManager.deleteRoom(roomCode)
                         onBack()
-                    }, color = primary)
-                }
+                    },
+                    color = primary
+                )
             }
         }
 
-        if (showCelebration && game.status == "finished") {
+        if (showCelebration && game.status == "tournament_finished") {
+            val winner = when {
+                game.scoreX > game.scoreO -> "X"
+                game.scoreO > game.scoreX -> "O"
+                else -> ""
+            }
             WinnerCelebration(
-                winner = game.winner,
-                isDraw = game.isDraw,
+                winner = winner,
+                isDraw = game.scoreX == game.scoreO,
                 onDismiss = { showCelebration = false }
             )
         }

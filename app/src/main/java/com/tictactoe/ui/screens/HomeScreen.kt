@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -68,7 +69,8 @@ fun HomeScreen(
             Icon(
                 Icons.Default.Settings,
                 contentDescription = "Settings",
-                tint = textSecondary
+                tint = textSecondary,
+                modifier = Modifier.size(28.dp)
             )
         }
 
@@ -81,7 +83,8 @@ fun HomeScreen(
             Icon(
                 Icons.Default.BarChart,
                 contentDescription = "Stats",
-                tint = textSecondary
+                tint = textSecondary,
+                modifier = Modifier.size(28.dp)
             )
         }
 
@@ -94,7 +97,8 @@ fun HomeScreen(
             Icon(
                 Icons.Default.EmojiEvents,
                 contentDescription = "Leaderboard",
-                tint = textSecondary
+                tint = textSecondary,
+                modifier = Modifier.size(28.dp)
             )
         }
 

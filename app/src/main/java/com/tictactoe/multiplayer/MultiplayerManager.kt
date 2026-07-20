@@ -21,13 +21,17 @@ data class OnlineGame(
     val playerO: String = "",
     val winner: String = "",
     val isDraw: Boolean = false,
-    val status: String = "waiting"
+    val status: String = "waiting",   // waiting, playing, round_finished, tournament_finished
+    val totalRounds: Int = 1,
+    val currentRound: Int = 1,
+    val scoreX: Int = 0,
+    val scoreO: Int = 0
 )
 
 object MultiplayerManager {
 
     private val database: FirebaseDatabase? = try {
-        FirebaseDatabase.getInstance()
+        FirebaseDatabase.getInstance("https://tic-tac-toe-1c612-default-rtdb.asia-southeast1.firebasedatabase.app")
     } catch (_: Exception) {
         null
     }
@@ -42,7 +46,7 @@ object MultiplayerManager {
         return (1..6).map { chars.random() }.joinToString("")
     }
 
-    fun createRoom(boardSize: Int, callback: (String) -> Unit) {
+    fun createRoom(boardSize: Int, totalRounds: Int, callback: (String) -> Unit) {
         try {
             val db = database ?: run { callback(""); return }
             val roomCode = generateRoomCode()
@@ -57,7 +61,11 @@ object MultiplayerManager {
                 "playerO" to "",
                 "winner" to "",
                 "isDraw" to false,
-                "status" to "waiting"
+                "status" to "waiting",
+                "totalRounds" to totalRounds,
+                "currentRound" to 1,
+                "scoreX" to 0,
+                "scoreO" to 0
             )
 
             db.getReference("rooms").child(roomCode).setValue(game)
@@ -102,6 +110,9 @@ object MultiplayerManager {
                     val boardStr = snapshot.child("board").getValue(String::class.java) ?: return@addOnSuccessListener
                     val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
                     val currentPlayer = snapshot.child("currentPlayer").getValue(String::class.java) ?: "X"
+                    val currentStatus = snapshot.child("status").getValue(String::class.java) ?: ""
+
+                    if (currentStatus != "playing") return@addOnSuccessListener
 
                     val cells = boardStr.split(",").toMutableList()
                     if (cells.size != boardSize * boardSize) return@addOnSuccessListener
@@ -118,12 +129,66 @@ object MultiplayerManager {
                     val isFull = cells.none { it.isEmpty() }
                     val isDraw = !hasWon && isFull
 
-                    val updates = mapOf(
+                    val roundOver = hasWon || isDraw
+
+                    // Get current scores
+                    val scoreX = snapshot.child("scoreX").getValue(Int::class.java) ?: 0
+                    val scoreO = snapshot.child("scoreO").getValue(Int::class.java) ?: 0
+                    val totalRounds = snapshot.child("totalRounds").getValue(Int::class.java) ?: 1
+                    val currentRound = snapshot.child("currentRound").getValue(Int::class.java) ?: 1
+
+                    // Calculate new scores
+                    val newScoreX = if (hasWon && currentPlayer == "X") scoreX + 1 else scoreX
+                    val newScoreO = if (hasWon && currentPlayer == "O") scoreO + 1 else scoreO
+
+                    // Check if tournament is over
+                    val winsNeeded = (totalRounds / 2) + 1
+                    val tournamentOver = roundOver && (
+                        newScoreX >= winsNeeded ||
+                        newScoreO >= winsNeeded ||
+                        currentRound >= totalRounds
+                    )
+
+                    val newStatus = when {
+                        tournamentOver -> "tournament_finished"
+                        roundOver -> "round_finished"
+                        else -> "playing"
+                    }
+
+                    val updates = mutableMapOf<String, Any>(
                         "board" to cells.joinToString(","),
-                        "currentPlayer" to if (hasWon || isDraw) currentPlayer else nextPlayer,
+                        "currentPlayer" to if (roundOver) currentPlayer else nextPlayer,
                         "winner" to if (hasWon) currentPlayer else "",
                         "isDraw" to isDraw,
-                        "status" to if (hasWon || isDraw) "finished" else "playing"
+                        "status" to newStatus,
+                        "scoreX" to newScoreX,
+                        "scoreO" to newScoreO
+                    )
+
+                    ref.updateChildren(updates)
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun nextRound(roomCode: String) {
+        try {
+            val db = database ?: return
+            val ref = db.getReference("rooms").child(roomCode)
+
+            ref.get().addOnSuccessListener { snapshot ->
+                try {
+                    val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
+                    val currentRound = snapshot.child("currentRound").getValue(Int::class.java) ?: 1
+                    val board = List(boardSize) { List(boardSize) { "" } }
+
+                    val updates = mapOf(
+                        "board" to board.flatten().joinToString(","),
+                        "currentPlayer" to "X",
+                        "winner" to "",
+                        "isDraw" to false,
+                        "status" to "playing",
+                        "currentRound" to (currentRound + 1)
                     )
 
                     ref.updateChildren(updates)
@@ -157,7 +222,11 @@ object MultiplayerManager {
                         playerO = snapshot.child("playerO").getValue(String::class.java) ?: "",
                         winner = snapshot.child("winner").getValue(String::class.java) ?: "",
                         isDraw = snapshot.child("isDraw").getValue(Boolean::class.java) ?: false,
-                        status = snapshot.child("status").getValue(String::class.java) ?: "waiting"
+                        status = snapshot.child("status").getValue(String::class.java) ?: "waiting",
+                        totalRounds = snapshot.child("totalRounds").getValue(Int::class.java) ?: 1,
+                        currentRound = snapshot.child("currentRound").getValue(Int::class.java) ?: 1,
+                        scoreX = snapshot.child("scoreX").getValue(Int::class.java) ?: 0,
+                        scoreO = snapshot.child("scoreO").getValue(Int::class.java) ?: 0
                     )
                     trySend(game)
                 } catch (_: Exception) {}
