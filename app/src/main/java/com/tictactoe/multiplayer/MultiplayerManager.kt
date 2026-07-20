@@ -4,6 +4,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.OnDisconnect
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,12 +22,14 @@ data class OnlineGame(
     val playerO: String = "",
     val winner: String = "",
     val isDraw: Boolean = false,
-    val status: String = "waiting",   // waiting, playing, round_finished, tournament_finished
+    val status: String = "waiting",
     val totalRounds: Int = 1,
     val currentRound: Int = 1,
     val scoreX: Int = 0,
     val scoreO: Int = 0
-)
+) {
+    val bothPlayersConnected: Boolean get() = playerX.isNotEmpty() && playerO.isNotEmpty()
+}
 
 object MultiplayerManager {
 
@@ -68,8 +71,13 @@ object MultiplayerManager {
                 "scoreO" to 0
             )
 
-            db.getReference("rooms").child(roomCode).setValue(game)
-                .addOnSuccessListener { callback(roomCode) }
+            val ref = db.getReference("rooms").child(roomCode)
+            ref.setValue(game)
+                .addOnSuccessListener {
+                    // Set up disconnect handler - if creator leaves, delete room
+                    ref.onDisconnect().removeValue()
+                    callback(roomCode)
+                }
                 .addOnFailureListener { callback("") }
         } catch (_: Exception) {
             callback("")
@@ -87,7 +95,13 @@ object MultiplayerManager {
                     if (current.isEmpty()) {
                         ref.child("playerO").setValue(playerId)
                         ref.child("status").setValue("playing")
-                        callback(true)
+                            .addOnSuccessListener {
+                                // Set up disconnect handler - if joiner leaves, set back to waiting
+                                ref.child("playerO").onDisconnect().setValue("")
+                                ref.child("status").onDisconnect().setValue("waiting")
+                                callback(true)
+                            }
+                            .addOnFailureListener { callback(false) }
                     } else {
                         callback(false)
                     }
@@ -131,17 +145,14 @@ object MultiplayerManager {
 
                     val roundOver = hasWon || isDraw
 
-                    // Get current scores
                     val scoreX = snapshot.child("scoreX").getValue(Int::class.java) ?: 0
                     val scoreO = snapshot.child("scoreO").getValue(Int::class.java) ?: 0
                     val totalRounds = snapshot.child("totalRounds").getValue(Int::class.java) ?: 1
                     val currentRound = snapshot.child("currentRound").getValue(Int::class.java) ?: 1
 
-                    // Calculate new scores
                     val newScoreX = if (hasWon && currentPlayer == "X") scoreX + 1 else scoreX
                     val newScoreO = if (hasWon && currentPlayer == "O") scoreO + 1 else scoreO
 
-                    // Check if tournament is over
                     val winsNeeded = (totalRounds / 2) + 1
                     val tournamentOver = roundOver && (
                         newScoreX >= winsNeeded ||
@@ -155,7 +166,7 @@ object MultiplayerManager {
                         else -> "playing"
                     }
 
-                    val updates = mutableMapOf<String, Any>(
+                    val updates = mapOf(
                         "board" to cells.joinToString(","),
                         "currentPlayer" to if (roundOver) currentPlayer else nextPlayer,
                         "winner" to if (hasWon) currentPlayer else "",
@@ -197,6 +208,20 @@ object MultiplayerManager {
         } catch (_: Exception) {}
     }
 
+    fun leaveRoom(roomCode: String, isCreator: Boolean) {
+        try {
+            if (isCreator) {
+                // Creator leaves - delete the whole room
+                database?.getReference("rooms")?.child(roomCode)?.removeValue()
+            } else {
+                // Joiner leaves - reset playerO and status
+                val ref = database?.getReference("rooms")?.child(roomCode) ?: return
+                ref.child("playerO").setValue("")
+                ref.child("status").setValue("waiting")
+            }
+        } catch (_: Exception) {}
+    }
+
     fun observeRoom(roomCode: String): Flow<OnlineGame> = callbackFlow {
         val db = database ?: run { close(); return@callbackFlow }
         val ref = db.getReference("rooms").child(roomCode)
@@ -204,6 +229,12 @@ object MultiplayerManager {
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
+                    if (!snapshot.exists()) {
+                        // Room was deleted
+                        close()
+                        return
+                    }
+
                     val boardStr = snapshot.child("board").getValue(String::class.java) ?: ""
                     val boardSize = snapshot.child("boardSize").getValue(Int::class.java) ?: 3
                     val cells = boardStr.split(",")

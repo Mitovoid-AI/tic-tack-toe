@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,11 +61,27 @@ fun OnlineGameScreen(
     var showCelebration by remember { mutableStateOf(false) }
     var lastStatus by remember { mutableStateOf("waiting") }
 
+    // Clean up when leaving
+    DisposableEffect(Unit) {
+        onDispose {
+            MultiplayerManager.leaveRoom(roomCode, isCreator)
+        }
+    }
+
+    // Detect opponent leaving
+    var opponentLeft by remember { mutableStateOf(false) }
+    if (game.status == "playing" && !game.bothPlayersConnected) {
+        opponentLeft = true
+    }
+    if (game.status == "waiting" && !isCreator && lastStatus == "playing") {
+        opponentLeft = true
+    }
+    lastStatus = game.status
+
     // Trigger celebration on tournament finish
     if (game.status == "tournament_finished" && lastStatus != "tournament_finished") {
         showCelebration = true
     }
-    lastStatus = game.status
 
     val boardSize = game.boardSize
     val gameState = remember(game.board, game.winner, game.isDraw) {
@@ -79,52 +97,10 @@ fun OnlineGameScreen(
         state
     }
 
-    val statusText = when {
-        game.status == "waiting" -> "Waiting for opponent..."
-        game.status == "tournament_finished" -> {
-            val winner = when {
-                game.scoreX > game.scoreO -> if (amX) "You Win!" else "You Lose!"
-                game.scoreO > game.scoreX -> if (!amX) "You Win!" else "You Lose!"
-                else -> "Tied!"
-            }
-            winner
-        }
-        game.status == "round_finished" -> {
-            val roundWinner = game.winner
-            when {
-                roundWinner == mySymbol -> "You win this round!"
-                game.isDraw -> "Round draw!"
-                else -> "Opponent wins this round!"
-            }
-        }
-        isMyTurn -> "Your Turn ($mySymbol)"
-        else -> "Opponent's Turn"
-    }
-
-    val statusColor = when {
-        game.status == "tournament_finished" -> {
-            when {
-                game.scoreX > game.scoreO -> if (amX) primary else secondary
-                game.scoreO > game.scoreX -> if (!amX) primary else secondary
-                else -> textSecondary
-            }
-        }
-        game.status == "round_finished" -> {
-            val roundWinner = game.winner
-            when {
-                roundWinner == mySymbol -> primary
-                game.isDraw -> textSecondary
-                else -> secondary
-            }
-        }
-        isMyTurn -> primary
-        else -> secondary
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         IconButton(
             onClick = {
-                if (isCreator) MultiplayerManager.deleteRoom(roomCode)
+                MultiplayerManager.leaveRoom(roomCode, isCreator)
                 onBack()
             },
             modifier = Modifier
@@ -141,6 +117,60 @@ fun OnlineGameScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Opponent left message
+            if (opponentLeft) {
+                Text(
+                    text = "Opponent Left",
+                    color = secondary,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Your opponent has disconnected",
+                    color = textSecondary,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                NeonButton(
+                    text = "BACK TO LOBBY",
+                    onClick = {
+                        MultiplayerManager.deleteRoom(roomCode)
+                        onBack()
+                    },
+                    color = primary
+                )
+                return@Box
+            }
+
+            // Waiting for opponent
+            if (!game.bothPlayersConnected) {
+                Text(
+                    text = "Waiting for Opponent",
+                    color = primary,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Room: $roomCode",
+                    color = textSecondary,
+                    fontSize = 14.sp,
+                    letterSpacing = 3.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Share this code with your friend",
+                    color = textSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                CircularProgressIndicator(color = primary)
+                return@Box
+            }
+
+            // Both players connected - show game
+
             // Room code
             Text(
                 text = "Room: $roomCode",
@@ -203,6 +233,46 @@ fun OnlineGameScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Status
+            val statusText = when {
+                game.status == "tournament_finished" -> {
+                    when {
+                        game.scoreX > game.scoreO -> if (amX) "You Win!" else "You Lose!"
+                        game.scoreO > game.scoreX -> if (!amX) "You Win!" else "You Lose!"
+                        else -> "Tied!"
+                    }
+                }
+                game.status == "round_finished" -> {
+                    val roundWinner = game.winner
+                    when {
+                        roundWinner == mySymbol -> "You win this round!"
+                        game.isDraw -> "Round draw!"
+                        else -> "Opponent wins this round!"
+                    }
+                }
+                isMyTurn -> "Your Turn ($mySymbol)"
+                else -> "Opponent's Turn"
+            }
+
+            val statusColor = when {
+                game.status == "tournament_finished" -> {
+                    when {
+                        game.scoreX > game.scoreO -> if (amX) primary else secondary
+                        game.scoreO > game.scoreX -> if (!amX) primary else secondary
+                        else -> textSecondary
+                    }
+                }
+                game.status == "round_finished" -> {
+                    val roundWinner = game.winner
+                    when {
+                        roundWinner == mySymbol -> primary
+                        game.isDraw -> textSecondary
+                        else -> secondary
+                    }
+                }
+                isMyTurn -> primary
+                else -> secondary
+            }
+
             Text(
                 text = statusText,
                 color = statusColor,
@@ -250,7 +320,7 @@ fun OnlineGameScreen(
                 NeonButton(
                     text = "BACK TO LOBBY",
                     onClick = {
-                        if (isCreator) MultiplayerManager.deleteRoom(roomCode)
+                        MultiplayerManager.deleteRoom(roomCode)
                         onBack()
                     },
                     color = primary
