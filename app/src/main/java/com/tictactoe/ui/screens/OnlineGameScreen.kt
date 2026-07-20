@@ -84,7 +84,7 @@ fun OnlineGameScreen(
     }
 
     val boardSize = game.boardSize
-    val gameState = remember(game.board, game.winner, game.isDraw) {
+    val gameState = run {
         var state = GameState(boardSize = boardSize, winLength = if (boardSize == 3) 3 else 4)
         for (r in 0 until boardSize) {
             for (c in 0 until boardSize) {
