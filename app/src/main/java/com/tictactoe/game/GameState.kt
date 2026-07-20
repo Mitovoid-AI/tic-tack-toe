@@ -84,4 +84,44 @@ data class GameState(
     }
 
     fun reset(): GameState = GameState(boardSize = boardSize, winLength = winLength)
+
+    companion object {
+        fun fromBoard(board: List<List<String>>, boardSize: Int, winLength: Int, currentPlayer: String): GameState {
+            var state = GameState(boardSize = boardSize, winLength = winLength, currentPlayer = currentPlayer)
+            // Set the board directly without replaying moves
+            state = state.copy(
+                board = board,
+                moveCount = board.flatten().count { it.isNotEmpty() }
+            )
+            // Check if there's already a winner by scanning the board
+            state = state.checkBoardForWinner()
+            return state
+        }
+    }
+
+    private fun checkBoardForWinner(): GameState {
+        // Check all cells for a win
+        for (r in 0 until boardSize) {
+            for (c in 0 until boardSize) {
+                val player = board[r][c]
+                if (player.isNotEmpty()) {
+                    val winCells = checkWin(board, r, c, player)
+                    if (winCells.isNotEmpty()) {
+                        return copy(
+                            winner = player,
+                            winningCells = winCells,
+                            isGameOver = true,
+                            isDraw = false
+                        )
+                    }
+                }
+            }
+        }
+        // Check for draw
+        val isFull = board.flatten().none { it.isEmpty() }
+        if (isFull) {
+            return copy(isDraw = true, isGameOver = true)
+        }
+        return this
+    }
 }

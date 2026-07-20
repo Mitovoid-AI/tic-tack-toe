@@ -84,18 +84,12 @@ fun OnlineGameScreen(
     }
 
     val boardSize = game.boardSize
-    val gameState = run {
-        var state = GameState(boardSize = boardSize, winLength = if (boardSize == 3) 3 else 4)
-        for (r in 0 until boardSize) {
-            for (c in 0 until boardSize) {
-                val cell = game.board.getOrNull(r)?.getOrNull(c) ?: ""
-                if (cell.isNotEmpty()) {
-                    state = state.makeMove(r, c)
-                }
-            }
-        }
-        state
-    }
+    val gameState = GameState.fromBoard(
+        board = game.board,
+        boardSize = boardSize,
+        winLength = if (boardSize == 3) 3 else 4,
+        currentPlayer = game.currentPlayer
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         IconButton(
