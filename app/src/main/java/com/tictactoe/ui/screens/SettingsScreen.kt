@@ -45,10 +45,13 @@ import com.tictactoe.TicTacToeApp
 import com.tictactoe.config.AppConfig
 import com.tictactoe.ui.components.GlassCard
 import com.tictactoe.ui.components.NeonButton
+import com.tictactoe.ui.components.UpdateDialog
 import com.tictactoe.ui.theme.AppTheme
 import com.tictactoe.ui.theme.ThemeManager
 import com.tictactoe.util.MarkerManager
 import com.tictactoe.util.PrefsManager
+import com.tictactoe.util.UpdateInfo
+import com.tictactoe.util.UpdateManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -56,9 +59,6 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val repo = TicTacToeApp.instance.gameRepository
-    val configManager = TicTacToeApp.instance.remoteConfigManager
-
-    var refreshStatus by remember { mutableStateOf("") }
 
     val primary = AppConfig.primaryColor()
     val secondary = AppConfig.secondaryColor()
@@ -394,26 +394,36 @@ fun SettingsScreen(onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
 
         // Actions
+        var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+        var updateStatus by remember { mutableStateOf("") }
+
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Actions", color = textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
 
                 NeonButton(
-                    text = "REFRESH CONFIG",
+                    text = "CHECK FOR UPDATES",
                     onClick = {
                         scope.launch {
-                            refreshStatus = "Refreshing..."
-                            configManager.clearCache()
-                            val config = configManager.fetchConfig()
-                            AppConfig.update(config)
-                            refreshStatus = "Config updated!"
+                            updateStatus = "Checking..."
+                            try {
+                                val info = UpdateManager.checkForUpdate(TicTacToeApp.instance)
+                                if (info != null) {
+                                    updateInfo = info
+                                    updateStatus = ""
+                                } else {
+                                    updateStatus = "You're on the latest version!"
+                                }
+                            } catch (_: Exception) {
+                                updateStatus = "Failed to check for updates"
+                            }
                         }
                     },
                     color = primary
                 )
 
-                if (refreshStatus.isNotEmpty()) {
-                    Text(refreshStatus, color = accent, fontSize = 13.sp)
+                if (updateStatus.isNotEmpty()) {
+                    Text(updateStatus, color = accent, fontSize = 13.sp)
                 }
 
                 NeonButton(
@@ -428,6 +438,14 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
 
+        // Show update dialog if available
+        updateInfo?.let { info ->
+            UpdateDialog(
+                updateInfo = info,
+                onDismiss = { updateInfo = null }
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // App info
@@ -439,7 +457,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 val version = try {
                     val pInfo = com.tictactoe.TicTacToeApp.instance.packageManager.getPackageInfo(com.tictactoe.TicTacToeApp.instance.packageName, 0)
                     "v${pInfo.versionName}"
-                } catch (_: Exception) { "v1.23" }
+                } catch (_: Exception) { "v1.25" }
                 Text("Version $version", color = textSecondary, fontSize = 13.sp)
             }
         }
